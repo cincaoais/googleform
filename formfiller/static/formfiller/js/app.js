@@ -84,19 +84,22 @@ function renderFields(fields) {
             optionsHtml = `<div class="options-preview mt-1">Scale: ${low} — ${high}</div>`;
         }
 
+        const isEmail = field._is_email || false;
+
         let strategyHtml = '';
         if (isFileUpload) {
             strategyHtml = `<div class="alert alert-secondary py-1 px-2 mb-0 mt-2">
                 <small><i class="bi bi-info-circle"></i> File upload is not supported.</small>
             </div>`;
         } else {
+            const defaultStrat = isEmail ? 'template' : 'random';
             const strategies = isChoice || isScale
                 ? `<option value="random" selected>Random from options</option>
                    <option value="fixed">Fixed value</option>`
-                : `<option value="random" selected>Random (auto-detect)</option>
+                : `<option value="random" ${defaultStrat === 'random' ? 'selected' : ''}>Random (auto-detect)</option>
                    <option value="fixed">Fixed value</option>
                    <option value="from_list">From list</option>
-                   <option value="template">Template pattern</option>`;
+                   <option value="template" ${defaultStrat === 'template' ? 'selected' : ''}>Template pattern</option>`;
 
             strategyHtml = `
             <div class="strategy-config">
@@ -111,7 +114,18 @@ function renderFields(fields) {
                         </select>
                     </div>
                 </div>
-                <div id="strategyExtra_${field.entry_id}" class="mt-2 d-none"></div>
+                <div id="strategyExtra_${field.entry_id}" class="${isEmail ? 'mt-2' : 'mt-2 d-none'}">
+                    ${isEmail ? `<input type="text" class="form-control form-control-sm mb-2"
+                           id="templateValue_${field.entry_id}"
+                           value="{chinese_surname}{initials}-{choice:wm23,wm24,wp22,wp21}@student.tarc.edu.my">
+                    <div class="form-text small" style="line-height:1.6">
+                        <strong>Placeholders:</strong>
+                        <code>{chinese_surname}</code> <code>{initials}</code> <code>{choice:a,b,c}</code>
+                        <code>{number:1-99}</code> <code>{digit}</code> <code>{digits:N}</code>
+                        <code>{letter}</code> <code>{letters:N}</code>
+                        <code>{first_name}</code> <code>{last_name}</code> <code>{name}</code> <code>{email}</code>
+                    </div>` : ''}
+                </div>
             </div>`;
         }
 
