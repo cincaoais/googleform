@@ -112,6 +112,33 @@ COMPANY_NAMES = [
 ]
 
 
+CHINESE_SURNAMES = [
+    "tan", "lim", "lee", "chen", "wong", "ng", "ong", "goh", "chan", "chua",
+    "teh", "yap", "koh", "low", "sim", "ho", "lau", "teo", "foo", "chong",
+    "yeo", "lai", "chew", "heng", "soh", "tay", "phua", "ang", "loh", "khoo",
+    "yeoh", "chia", "leong", "choo", "wee", "yong", "kwok", "pang", "seah",
+    "quek", "hoe", "koo", "phang", "kok", "chai", "hung", "chin", "chng",
+    "beh", "gan", "saw", "ooi", "png", "soo", "mah", "tham", "yew", "san",
+    "sia", "kek", "tok", "lew", "ngo", "cheah", "chang", "tang", "choong",
+    "loke", "teoh", "liow", "chung", "hew", "kam", "lye", "sew", "bong",
+    "chu", "fong", "seng", "ting", "loo", "mai", "cheong", "lam", "mok",
+    "chieng", "tiong", "hii", "sie", "yii", "ling", "lu", "kong", "tong",
+]
+
+CHINESE_INITIALS = [
+    "ah", "bh", "ch", "ck", "cl", "cs", "cy", "dh", "dk", "dy",
+    "eh", "ey", "fh", "fy", "gh", "hk", "hl", "hm", "hn", "hp",
+    "hs", "hw", "hy", "hz", "jc", "jh", "jk", "jl", "jm", "jn",
+    "js", "jw", "jy", "kc", "kh", "kk", "kl", "km", "kn", "ks",
+    "kw", "ky", "lh", "lk", "lm", "ln", "ly", "mh", "mk", "ml",
+    "mn", "ms", "my", "nh", "nk", "pk", "pl", "py", "sc", "sh",
+    "sk", "sl", "sm", "sn", "sp", "ss", "sw", "sy", "tc", "th",
+    "tk", "tl", "tm", "ts", "tw", "ty", "wc", "wh", "wk", "wl",
+    "wm", "wn", "ws", "wy", "xh", "xy", "yc", "yh", "yk", "yl",
+    "ym", "yn", "ys", "yw", "yy", "zh", "zk", "zl", "zm", "zy",
+]
+
+
 def generate_value(field, strategy, submission_index=0):
     """
     Generate a value for a form field based on the configured strategy.
@@ -135,8 +162,86 @@ def generate_value(field, strategy, submission_index=0):
             return ""
         return value_list[submission_index % len(value_list)]
 
+    if strat_type == "template":
+        template = strategy.get("template", "")
+        if template:
+            return _render_template(template)
+        return ""
+
     # Default: random
     return _generate_random(field)
+
+
+def _render_template(template):
+    """
+    Render a template string with placeholders.
+
+    Supported placeholders:
+        {chinese_surname}     → random Chinese surname (e.g. "tan", "lim", "chen")
+        {initials}            → random 2-letter initials (e.g. "ch", "ws", "yk")
+        {choice:a,b,c}        → random pick from comma-separated values
+        {number:MIN-MAX}      → random integer in range (e.g. {number:1-99})
+        {letter}              → single random lowercase letter
+        {letters:N}           → N random lowercase letters (e.g. {letters:3})
+        {digit}               → single random digit 0-9
+        {digits:N}            → N random digits
+        {first_name}          → random English first name (lowercase)
+        {last_name}           → random English last name (lowercase)
+        {name}                → "FirstName LastName"
+        {email}               → random email address
+    """
+    import re
+
+    def replacer(match):
+        token = match.group(1)
+
+        if token == "chinese_surname":
+            return random.choice(CHINESE_SURNAMES)
+
+        if token == "initials":
+            return random.choice(CHINESE_INITIALS)
+
+        if token.startswith("choice:"):
+            options = token[7:].split(",")
+            return random.choice([o.strip() for o in options if o.strip()])
+
+        if token.startswith("number:"):
+            range_str = token[7:]
+            parts = range_str.split("-")
+            if len(parts) == 2:
+                lo, hi = int(parts[0]), int(parts[1])
+                return str(random.randint(lo, hi))
+            return "0"
+
+        if token == "letter":
+            return random.choice(string.ascii_lowercase)
+
+        if token.startswith("letters:"):
+            n = int(token[8:])
+            return "".join(random.choices(string.ascii_lowercase, k=n))
+
+        if token == "digit":
+            return str(random.randint(0, 9))
+
+        if token.startswith("digits:"):
+            n = int(token[7:])
+            return "".join(str(random.randint(0, 9)) for _ in range(n))
+
+        if token == "first_name":
+            return random.choice(FIRST_NAMES).lower()
+
+        if token == "last_name":
+            return random.choice(LAST_NAMES).lower()
+
+        if token == "name":
+            return f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}"
+
+        if token == "email":
+            return _generate_email()
+
+        return match.group(0)  # leave unknown placeholders as-is
+
+    return re.sub(r"\{([^}]+)\}", replacer, template)
 
 
 def _generate_random(field):

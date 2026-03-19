@@ -95,7 +95,8 @@ function renderFields(fields) {
                    <option value="fixed">Fixed value</option>`
                 : `<option value="random" selected>Random (auto-detect)</option>
                    <option value="fixed">Fixed value</option>
-                   <option value="from_list">From list</option>`;
+                   <option value="from_list">From list</option>
+                   <option value="template">Template pattern</option>`;
 
             strategyHtml = `
             <div class="strategy-config">
@@ -152,6 +153,23 @@ function onStrategyChange(entryId, strategy) {
         extra.classList.remove('d-none');
         extra.innerHTML = `<textarea class="form-control form-control-sm" rows="3"
                            id="listValue_${entryId}" placeholder="One value per line"></textarea>`;
+    } else if (strategy === 'template') {
+        extra.classList.remove('d-none');
+        extra.innerHTML = `
+            <input type="text" class="form-control form-control-sm mb-2"
+                   id="templateValue_${entryId}"
+                   placeholder="{chinese_surname}{initials}-{choice:wm23,wm24,wp22}@student.tarc.edu.my">
+            <div class="form-text small" style="line-height:1.6">
+                <strong>Placeholders:</strong><br>
+                <code>{chinese_surname}</code> tan, lim, chen...<br>
+                <code>{initials}</code> ch, ws, yk... (2-letter)<br>
+                <code>{choice:a,b,c}</code> random pick<br>
+                <code>{number:1-99}</code> random number in range<br>
+                <code>{first_name}</code> / <code>{last_name}</code> English names<br>
+                <code>{letter}</code> single letter &nbsp; <code>{letters:3}</code> N letters<br>
+                <code>{digit}</code> single digit &nbsp; <code>{digits:4}</code> N digits<br>
+                <code>{email}</code> random email &nbsp; <code>{name}</code> full name
+            </div>`;
     } else {
         extra.classList.add('d-none');
         extra.innerHTML = '';
@@ -182,6 +200,9 @@ async function startSubmission() {
         } else if (sel.value === 'from_list') {
             const ta = document.getElementById(`listValue_${field.entry_id}`);
             strat.value_list = ta ? ta.value.split('\n').filter(Boolean) : [];
+        } else if (sel.value === 'template') {
+            const inp = document.getElementById(`templateValue_${field.entry_id}`);
+            strat.template = inp ? inp.value : '';
         }
         strategies[field.entry_id] = strat;
     });
