@@ -1,0 +1,63 @@
+body {
+    background-color: #f5f6fa;
+}
+
+.log-area {
+    max-height: 250px;
+    overflow-y: auto;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.82rem;
+    background: #1a1a2e;
+    color: #a8e6cf;
+    padding: 12px !important;
+}
+
+.log-area .log-entry {
+    margin-bottom: 2px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.log-area .log-error {
+    color: #ff6b6b;
+}
+
+.log-area .log-success {
+    color: #a8e6cf;
+}
+
+.log-area .log-info {
+    color: #74b9ff;
+}
+
+.field-card {
+    border-left: 4px solid #0d6efd;
+    transition: border-color 0.2s;
+}
+
+.field-card.required {
+    border-left-color: #dc3545;
+}
+
+.field-type-badge {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.strategy-config {
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 10px;
+    margin-top: 8px;
+}
+
+.options-preview {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.options-preview .badge {
+    font-weight: normal;
+    margin: 2px;
+}

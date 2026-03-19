@@ -1,0 +1,127 @@
+{% extends "formfiller/base.html" %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-lg-8">
+        <div class="text-center mb-4">
+            <h1 class="display-5 fw-bold">Google Form Auto-Filler</h1>
+            <p class="text-muted lead">Paste a Google Form URL to detect fields and auto-submit responses.</p>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <!-- URL Input -->
+                <div class="mb-3">
+                    <label for="formUrl" class="form-label fw-semibold">Google Form URL</label>
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text"><i class="bi bi-link-45deg"></i></span>
+                        <input type="url" class="form-control" id="formUrl"
+                               placeholder="https://docs.google.com/forms/d/e/.../viewform"
+                               autocomplete="off">
+                        <button class="btn btn-primary" type="button" id="btnParse" onclick="parseForm()">
+                            <span id="parseSpinner" class="spinner-border spinner-border-sm d-none me-1"></span>
+                            Analyze Form
+                        </button>
+                    </div>
+                    <div class="form-text">Paste the full URL of the Google Form you want to auto-fill.</div>
+                </div>
+
+                <!-- Error Alert -->
+                <div id="alertArea" class="d-none"></div>
+            </div>
+        </div>
+
+        <!-- Form Fields Section (populated dynamically after parsing) -->
+        <div id="formSection" class="d-none mt-4">
+            <!-- Form Info Header -->
+            <div class="card shadow-sm mb-3">
+                <div class="card-body">
+                    <h4 id="formTitle" class="card-title"></h4>
+                    <p id="formDescription" class="card-text text-muted"></p>
+                    <div id="signinWarning" class="alert alert-warning d-none">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>Google Sign-in Required:</strong> This form requires Google authentication. Auto-submission is not available for this form.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fields Container -->
+            <div id="fieldsContainer"></div>
+
+            <!-- Submission Settings -->
+            <div class="card shadow-sm mt-3">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="bi bi-gear"></i> Submission Settings</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="submitCount" class="form-label fw-semibold">Number of Submissions</label>
+                            <input type="number" class="form-control" id="submitCount" min="1" max="10000" value="1">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="submitDelay" class="form-label fw-semibold">Delay (ms)</label>
+                            <input type="number" class="form-control" id="submitDelay" min="0" max="30000" value="1000" step="100">
+                            <div class="form-text">Delay between each submission</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Submission Mode</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="useBrowser">
+                                <label class="form-check-label" for="useBrowser">Use browser simulation (slower)</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Proxy Settings -->
+                    <div class="mt-3">
+                        <label for="proxyInput" class="form-label fw-semibold">Proxy (optional)</label>
+                        <textarea class="form-control" id="proxyInput" rows="2"
+                                  placeholder="http://host:port (one per line for rotation)"></textarea>
+                        <div class="form-text">Enter proxy addresses, one per line. Leave empty for direct connection.</div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="mt-4 d-flex gap-2">
+                        <button class="btn btn-success btn-lg" id="btnStart" onclick="startSubmission()">
+                            <i class="bi bi-play-fill"></i> Start Submission
+                        </button>
+                        <button class="btn btn-danger btn-lg d-none" id="btnStop" onclick="stopSubmission()">
+                            <i class="bi bi-stop-fill"></i> Stop
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress Section -->
+            <div id="progressSection" class="card shadow-sm mt-3 d-none">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="bi bi-activity"></i> Progress</h5>
+                </div>
+                <div class="card-body">
+                    <div class="progress mb-3" style="height: 24px;">
+                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                             role="progressbar" style="width: 0%">0%</div>
+                    </div>
+                    <div class="row text-center mb-3">
+                        <div class="col">
+                            <span class="fs-4 fw-bold text-success" id="completedCount">0</span>
+                            <br><small class="text-muted">Completed</small>
+                        </div>
+                        <div class="col">
+                            <span class="fs-4 fw-bold text-danger" id="failedCount">0</span>
+                            <br><small class="text-muted">Failed</small>
+                        </div>
+                        <div class="col">
+                            <span class="fs-4 fw-bold text-primary" id="totalCount">0</span>
+                            <br><small class="text-muted">Total</small>
+                        </div>
+                    </div>
+                    <!-- Log Area -->
+                    <div id="logArea" class="log-area border rounded p-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
