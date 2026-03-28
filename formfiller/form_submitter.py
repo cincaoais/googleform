@@ -169,9 +169,13 @@ class FormSubmitter:
             if success:
                 job["completed"] += 1
                 consecutive_failures = 0
+                # Include entry answers for log display
+                answers = {k: v for k, v in form_data.items()
+                           if k.startswith("entry.")}
                 self._broadcast(job_id, {
                     "type": "success",
                     "index": i + 1,
+                    "answers": answers,
                 })
             else:
                 job["failed"] += 1

@@ -168,6 +168,17 @@ def generate_value(field, strategy, submission_index=0):
             return _render_template(template)
         return ""
 
+    if strat_type == "pick_options":
+        picked = strategy.get("picked_options", [])
+        if not picked:
+            return _generate_random(field)
+        field_type = field.get("field_type", "")
+        if field_type == "checkbox":
+            count = random.randint(1, len(picked))
+            return random.sample(picked, count)
+        else:
+            return random.choice(picked)
+
     # Default: random
     return _generate_random(field)
 

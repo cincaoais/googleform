@@ -61,3 +61,23 @@ body {
     font-weight: normal;
     margin: 2px;
 }
+
+.pick-options-list {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 6px 0;
+}
+
+.pick-options-list .form-check {
+    padding-left: 1.8em;
+    margin-bottom: 2px;
+}
+
+#samplePreviewBody .table {
+    font-size: 0.85rem;
+}
+
+#samplePreviewBody .table td,
+#samplePreviewBody .table th {
+    vertical-align: middle;
+}

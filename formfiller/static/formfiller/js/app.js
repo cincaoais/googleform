@@ -95,7 +95,8 @@ function renderFields(fields) {
             const defaultStrat = isEmail ? 'template' : 'random';
             const strategies = isChoice || isScale
                 ? `<option value="random" selected>Random from options</option>
-                   <option value="fixed">Fixed value</option>`
+                   <option value="pick_options">Pick specific options</option>
+                   <option value="fixed">Fixed value (type exactly)</option>`
                 : `<option value="random" ${defaultStrat === 'random' ? 'selected' : ''}>Random (auto-detect)</option>
                    <option value="fixed">Fixed value</option>
                    <option value="from_list">From list</option>
@@ -167,6 +168,34 @@ function onStrategyChange(entryId, strategy) {
         extra.classList.remove('d-none');
         extra.innerHTML = `<textarea class="form-control form-control-sm" rows="3"
                            id="listValue_${entryId}" placeholder="One value per line"></textarea>`;
+    } else if (strategy === 'pick_options') {
+        const field = formData ? formData.fields.find(f => f.entry_id === entryId) : null;
+        if (field && field.options && field.options.length > 0) {
+            const isCheckbox = field.field_type === 'checkbox';
+            const inputType = isCheckbox ? 'checkbox' : 'radio';
+            const optionsHtml = field.options
+                .filter(o => o !== '')
+                .map((opt, i) => `
+                    <div class="form-check">
+                        <input class="form-check-input" type="${inputType}"
+                               name="pick_${entryId}" id="pick_${entryId}_${i}"
+                               value="${escapeHtml(opt)}" checked>
+                        <label class="form-check-label small" for="pick_${entryId}_${i}">
+                            ${escapeHtml(opt)}
+                        </label>
+                    </div>`).join('');
+
+            const note = isCheckbox
+                ? 'Random subset of checked options per submission'
+                : field.options.filter(o => o !== '').length > 1
+                    ? 'One checked option picked randomly per submission'
+                    : '';
+
+            extra.classList.remove('d-none');
+            extra.innerHTML = `
+                <div class="pick-options-list mt-1">${optionsHtml}</div>
+                ${note ? `<div class="form-text small text-muted mt-1"><i class="bi bi-info-circle"></i> ${note}</div>` : ''}`;
+        }
     } else if (strategy === 'template') {
         extra.classList.remove('d-none');
         extra.innerHTML = `
@@ -211,6 +240,9 @@ async function startSubmission() {
         if (sel.value === 'fixed') {
             const inp = document.getElementById(`fixedValue_${field.entry_id}`);
             strat.fixed_value = inp ? inp.value : '';
+        } else if (sel.value === 'pick_options') {
+            const checked = [...document.querySelectorAll(`input[name="pick_${field.entry_id}"]:checked`)];
+            strat.picked_options = checked.map(el => el.value);
         } else if (sel.value === 'from_list') {
             const ta = document.getElementById(`listValue_${field.entry_id}`);
             strat.value_list = ta ? ta.value.split('\n').filter(Boolean) : [];
@@ -243,6 +275,7 @@ async function startSubmission() {
         const data = await resp.json();
         if (data.success) {
             currentJobId = data.job_id;
+            generateSamplePreview(strategies);
             showProgress(count);
             connectSSE(data.job_id);
         } else {
@@ -278,7 +311,17 @@ function connectSSE(jobId) {
         } else if (data.type === 'error') {
             appendLog(`#${data.index || '?'} Error: ${data.message}`, 'error');
         } else if (data.type === 'success') {
-            appendLog(`#${data.index} Submitted successfully`, 'success');
+            let summary = `#${data.index} Submitted successfully`;
+            if (data.answers) {
+                const vals = Object.values(data.answers);
+                if (vals.length > 0) {
+                    const preview = vals.slice(0, 5).map(v =>
+                        Array.isArray(v) ? v.join('+') : String(v)
+                    ).map(v => v.length > 20 ? v.substring(0, 20) + '..' : v).join(' | ');
+                    summary += ` — ${preview}${vals.length > 5 ? ' ...' : ''}`;
+                }
+            }
+            appendLog(summary, 'success');
         } else if (data.type === 'complete' || data.type === 'stopped') {
             onJobDone(data);
         }
@@ -332,6 +375,100 @@ async function stopSubmission() {
         appendLog('Stopping...', 'info');
     } catch (err) {
         appendLog('Failed to stop: ' + err.message, 'error');
+    }
+}
+
+// ============ SAMPLE PREVIEW ============
+
+function generateSamplePreview(strategies) {
+    if (!formData || !formData.fields) return;
+
+    const container = document.getElementById('samplePreview');
+    const body = document.getElementById('samplePreviewBody');
+
+    let questionNum = 0;
+    let rows = '';
+
+    formData.fields.forEach(field => {
+        if (field.field_type === 'file_upload') return;
+        questionNum++;
+
+        const strat = strategies[field.entry_id] || { strategy: 'random' };
+        const label = field.label.length > 80 ? field.label.substring(0, 80) + '...' : field.label;
+        let answer = '';
+        let answerClass = '';
+
+        switch (strat.strategy) {
+            case 'fixed':
+                answer = strat.fixed_value || '(empty)';
+                answerClass = 'text-primary';
+                break;
+            case 'pick_options':
+                if (strat.picked_options && strat.picked_options.length > 0) {
+                    answer = strat.picked_options.join(', ');
+                    if (strat.picked_options.length > 1) {
+                        answer += ' <span class="badge bg-secondary">random pick</span>';
+                    }
+                } else {
+                    answer = '<span class="text-warning">(no options selected)</span>';
+                }
+                answerClass = 'text-success';
+                break;
+            case 'from_list':
+                if (strat.value_list && strat.value_list.length > 0) {
+                    const preview = strat.value_list.slice(0, 3).join(', ');
+                    answer = `Cycling: ${preview}${strat.value_list.length > 3 ? '...' : ''}`;
+                } else {
+                    answer = '(empty list)';
+                }
+                answerClass = 'text-info';
+                break;
+            case 'template':
+                answer = `<code>${escapeHtml(strat.template || '')}</code>`;
+                answerClass = '';
+                break;
+            default: // random
+                if (field.options && field.options.length > 0) {
+                    const validOpts = field.options.filter(o => o !== '');
+                    const sample = validOpts[Math.floor(Math.random() * validOpts.length)];
+                    answer = `<span class="text-muted">(random)</span> e.g. ${escapeHtml(sample)}`;
+                } else {
+                    answer = '<span class="text-muted">(random auto-detect)</span>';
+                }
+                break;
+        }
+
+        rows += `<tr>
+            <td class="text-center text-muted">${questionNum}</td>
+            <td class="small">${escapeHtml(label)}</td>
+            <td class="small ${answerClass}">${answer}</td>
+        </tr>`;
+    });
+
+    body.innerHTML = `
+        <table class="table table-sm table-striped mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="width:40px">#</th>
+                    <th>Question</th>
+                    <th style="width:40%">Sample Answer</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+
+    container.classList.remove('d-none');
+}
+
+function toggleSamplePreview() {
+    const body = document.getElementById('samplePreviewBody');
+    const icon = document.getElementById('sampleToggleIcon');
+    if (body.classList.contains('d-none')) {
+        body.classList.remove('d-none');
+        icon.className = 'bi bi-chevron-up';
+    } else {
+        body.classList.add('d-none');
+        icon.className = 'bi bi-chevron-down';
     }
 }
 
