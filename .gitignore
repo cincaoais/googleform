@@ -1,0 +1,10 @@
+# Auth state (contains Google session cookies)
+auth_states/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Environment
+.env

@@ -2,6 +2,7 @@
 let formData = null;
 let currentJobId = null;
 let eventSource = null;
+let formRequiresSignin = false;
 
 // ============ PARSE ============
 
@@ -53,6 +54,9 @@ function renderFormInfo(form) {
     const signinWarning = document.getElementById('signinWarning');
     const btnStart = document.getElementById('btnStart');
     if (form.requires_signin) {
+        formRequiresSignin = true;
+    }
+    if (formRequiresSignin && !isGoogleAuthenticated) {
         signinWarning.classList.remove('d-none');
         btnStart.disabled = true;
     } else {
@@ -95,6 +99,7 @@ function renderFields(fields) {
             const defaultStrat = isEmail ? 'template' : 'random';
             const strategies = isChoice || isScale
                 ? `<option value="random" selected>Random from options</option>
+                   <option value="weighted">Weighted random (%)</option>
                    <option value="pick_options">Pick specific options</option>
                    <option value="fixed">Fixed value (type exactly)</option>`
                 : `<option value="random" ${defaultStrat === 'random' ? 'selected' : ''}>Random (auto-detect)</option>
@@ -196,6 +201,35 @@ function onStrategyChange(entryId, strategy) {
                 <div class="pick-options-list mt-1">${optionsHtml}</div>
                 ${note ? `<div class="form-text small text-muted mt-1"><i class="bi bi-info-circle"></i> ${note}</div>` : ''}`;
         }
+    } else if (strategy === 'weighted') {
+        const field = formData ? formData.fields.find(f => f.entry_id === entryId) : null;
+        let options = [];
+        if (field) {
+            if (field.field_type === 'linear_scale') {
+                const lo = field.scale_min || 1;
+                const hi = field.scale_max || 5;
+                for (let i = lo; i <= hi; i++) options.push(String(i));
+            } else if (field.options) {
+                options = field.options.filter(o => o !== '');
+            }
+        }
+        if (options.length > 0) {
+            const defaultWeight = Math.round(100 / options.length);
+            const rows = options.map((opt, i) => `
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="small flex-grow-1">${escapeHtml(opt)}</span>
+                    <input type="number" class="form-control form-control-sm weight-input"
+                           style="width: 80px" data-entry="${entryId}" data-idx="${i}"
+                           value="${defaultWeight}" min="0" max="100">
+                    <span class="small text-muted">%</span>
+                </div>`).join('');
+            extra.classList.remove('d-none');
+            extra.innerHTML = `
+                <div class="mt-1">${rows}</div>
+                <div class="form-text small text-muted mt-1">
+                    <i class="bi bi-info-circle"></i> Higher % = more likely. Does not need to sum to 100.
+                </div>`;
+        }
     } else if (strategy === 'template') {
         extra.classList.remove('d-none');
         extra.innerHTML = `
@@ -249,6 +283,21 @@ async function startSubmission() {
         } else if (sel.value === 'template') {
             const inp = document.getElementById(`templateValue_${field.entry_id}`);
             strat.template = inp ? inp.value : '';
+        } else if (sel.value === 'weighted') {
+            const weightInputs = document.querySelectorAll(`.weight-input[data-entry="${field.entry_id}"]`);
+            const weights = {};
+            let opts;
+            if (field.field_type === 'linear_scale') {
+                opts = [];
+                for (let i = (field.scale_min || 1); i <= (field.scale_max || 5); i++) opts.push(String(i));
+            } else {
+                opts = (field.options || []).filter(o => o !== '');
+            }
+            weightInputs.forEach(inp => {
+                const idx = parseInt(inp.dataset.idx);
+                if (idx < opts.length) weights[opts[idx]] = parseFloat(inp.value) || 0;
+            });
+            strat.weights = weights;
         }
         strategies[field.entry_id] = strat;
     });
@@ -309,7 +358,11 @@ function connectSSE(jobId) {
         if (data.type === 'progress') {
             updateProgress(data);
         } else if (data.type === 'error') {
-            appendLog(`#${data.index || '?'} Error: ${data.message}`, 'error');
+            let errorMsg = data.message || '';
+            if (errorMsg.includes('401')) {
+                errorMsg += ' — Login to Google first (see Submission Settings > Google Account).';
+            }
+            appendLog(`#${data.index || '?'} Error: ${errorMsg}`, 'error');
         } else if (data.type === 'success') {
             let summary = `#${data.index} Submitted successfully`;
             if (data.answers) {
@@ -427,6 +480,18 @@ function generateSamplePreview(strategies) {
                 answer = `<code>${escapeHtml(strat.template || '')}</code>`;
                 answerClass = '';
                 break;
+            case 'weighted':
+                if (strat.weights) {
+                    const entries = Object.entries(strat.weights)
+                        .filter(([_, w]) => w > 0)
+                        .sort((a, b) => b[1] - a[1]);
+                    const top = entries.slice(0, 4).map(([opt, w]) => `${escapeHtml(opt)}: ${w}%`).join(', ');
+                    answer = `<span class="text-muted">(weighted)</span> ${top}${entries.length > 4 ? ' ...' : ''}`;
+                } else {
+                    answer = '<span class="text-muted">(weighted random)</span>';
+                }
+                answerClass = 'text-info';
+                break;
             default: // random
                 if (field.options && field.options.length > 0) {
                     const validOpts = field.options.filter(o => o !== '');
@@ -499,4 +564,108 @@ function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+// ============ GOOGLE AUTH ============
+
+function updateGoogleAuthUI() {
+    const loggedOut = document.getElementById('settingsAuthLoggedOut');
+    const loggedIn = document.getElementById('settingsAuthLoggedIn');
+    if (loggedOut && loggedIn) {
+        loggedOut.classList.toggle('d-none', isGoogleAuthenticated);
+        loggedIn.classList.toggle('d-none', !isGoogleAuthenticated);
+    }
+}
+
+async function googleLogin() {
+    // Disable all login buttons
+    document.querySelectorAll('#btnGoogleLogin, #btnSettingsLogin').forEach(btn => {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Opening...';
+    });
+    // Show all status areas
+    document.querySelectorAll('#loginStatus, #settingsLoginStatus').forEach(el => {
+        el.classList.remove('d-none');
+        el.textContent = 'A browser window will open. Sign in to your Google account.';
+    });
+
+    try {
+        const resp = await fetch('/api/google/login/', { method: 'POST' });
+        const data = await resp.json();
+        const msg = data.success
+            ? 'Waiting for sign-in... (check the browser window)'
+            : 'Login in progress. Check the browser window.';
+        document.querySelectorAll('#loginStatus, #settingsLoginStatus').forEach(el => {
+            el.textContent = msg;
+        });
+        pollLoginStatus();
+    } catch (err) {
+        document.querySelectorAll('#loginStatus, #settingsLoginStatus').forEach(el => {
+            el.innerHTML = '<span class="text-danger">Error: ' + escapeHtml(err.message) + '</span>';
+        });
+        document.querySelectorAll('#btnGoogleLogin, #btnSettingsLogin').forEach(btn => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-google"></i> Login to Google';
+        });
+    }
+}
+
+function pollLoginStatus() {
+    const interval = setInterval(async () => {
+        try {
+            const resp = await fetch('/api/google/auth-status/');
+            const data = await resp.json();
+
+            if (data.status === 'authenticated') {
+                clearInterval(interval);
+                isGoogleAuthenticated = true;
+                updateAuthBadge();
+                updateGoogleAuthUI();
+
+                const successMsg = formRequiresSignin
+                    ? '<span class="text-success"><i class="bi bi-check-circle"></i> Logged in! Re-analyzing form...</span>'
+                    : '<span class="text-success"><i class="bi bi-check-circle"></i> Logged in!</span>';
+                document.querySelectorAll('#loginStatus, #settingsLoginStatus').forEach(el => {
+                    el.innerHTML = successMsg;
+                });
+
+                const warnBtn = document.getElementById('btnGoogleLogin');
+                if (warnBtn) warnBtn.classList.add('d-none');
+                document.getElementById('btnStart').disabled = false;
+
+                if (formRequiresSignin) {
+                    setTimeout(() => parseForm(), 1000);
+                }
+            } else if (data.status === 'error') {
+                clearInterval(interval);
+                const errMsg = '<span class="text-danger"><i class="bi bi-x-circle"></i> ' + escapeHtml(data.error || 'Login failed') + '</span>';
+                document.querySelectorAll('#loginStatus, #settingsLoginStatus').forEach(el => {
+                    el.innerHTML = errMsg;
+                });
+                document.querySelectorAll('#btnGoogleLogin, #btnSettingsLogin').forEach(btn => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-google"></i> Retry Login';
+                });
+            }
+        } catch (err) {
+            // Network error, keep polling
+        }
+    }, 2000);
+}
+
+function onGoogleLogout() {
+    updateGoogleAuthUI();
+    document.querySelectorAll('#loginStatus, #settingsLoginStatus').forEach(el => {
+        el.classList.add('d-none');
+    });
+    if (formRequiresSignin) {
+        document.getElementById('signinWarning').classList.remove('d-none');
+        document.getElementById('btnStart').disabled = true;
+        const btn = document.getElementById('btnGoogleLogin');
+        if (btn) {
+            btn.classList.remove('d-none');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-google"></i> Login to Google';
+        }
+    }
 }

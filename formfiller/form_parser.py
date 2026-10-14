@@ -5,10 +5,11 @@ Primary strategy: parse FB_PUBLIC_LOAD_DATA_ embedded JavaScript variable.
 Fallback strategy: parse the rendered DOM via Playwright selectors.
 """
 
+import os
 import re
 import json
 from playwright.sync_api import sync_playwright
-from .config import PLAYWRIGHT_HEADLESS, GFORM_TYPE_MAP
+from .config import PLAYWRIGHT_HEADLESS, GFORM_TYPE_MAP, GOOGLE_AUTH_STATE_FILE
 
 
 def parse_form(url):
@@ -32,10 +33,13 @@ def parse_form(url):
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=PLAYWRIGHT_HEADLESS)
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                       "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        )
+        context_args = {
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        }
+        if os.path.exists(GOOGLE_AUTH_STATE_FILE):
+            context_args["storage_state"] = GOOGLE_AUTH_STATE_FILE
+        context = browser.new_context(**context_args)
         page = context.new_page()
 
         try:

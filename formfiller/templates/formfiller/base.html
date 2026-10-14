@@ -11,10 +11,20 @@
 </head>
 <body>
     <nav class="navbar navbar-dark bg-dark mb-4">
-        <div class="container">
+        <div class="container d-flex justify-content-between">
             <a class="navbar-brand" href="/">
-                <i class="bi bi-file-earmark-text"></i> Google Form Auto-Filler
+                <i class="bi bi-file-earmark-text"></i> Form Auto-Filler
             </a>
+            <div class="d-flex gap-3 align-items-center">
+                <a class="nav-link text-light" href="/"><i class="bi bi-google"></i> Google Forms</a>
+                <a class="nav-link text-light" href="/generic/"><i class="bi bi-globe"></i> Web Forms</a>
+                <span id="authBadge" class="d-none">
+                    <span class="badge bg-success"><i class="bi bi-check-circle"></i> Google</span>
+                    <button class="btn btn-sm btn-outline-light py-0 px-1 ms-1" onclick="googleLogout()" title="Logout">
+                        <i class="bi bi-box-arrow-right"></i>
+                    </button>
+                </span>
+            </div>
         </div>
     </nav>
 
@@ -23,7 +33,36 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    // Global Google auth state (shared across all pages)
+    let isGoogleAuthenticated = false;
+
+    function updateAuthBadge() {
+        const badge = document.getElementById('authBadge');
+        if (badge) badge.classList.toggle('d-none', !isGoogleAuthenticated);
+    }
+
+    async function googleLogout() {
+        try {
+            await fetch('/api/google/logout/', { method: 'POST' });
+            isGoogleAuthenticated = false;
+            updateAuthBadge();
+            if (typeof onGoogleLogout === 'function') onGoogleLogout();
+        } catch (e) {}
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const resp = await fetch('/api/google/auth-status/');
+            const data = await resp.json();
+            isGoogleAuthenticated = data.status === 'authenticated';
+            updateAuthBadge();
+            if (typeof updateGoogleAuthUI === 'function') updateGoogleAuthUI();
+        } catch (e) {}
+    });
+    </script>
+    {% block page_js %}
     <script src="{% static 'formfiller/js/app.js' %}"></script>
-    {% block extra_js %}{% endblock %}
+    {% endblock %}
 </body>
 </html>

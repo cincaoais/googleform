@@ -179,6 +179,31 @@ def generate_value(field, strategy, submission_index=0):
         else:
             return random.choice(picked)
 
+    if strat_type == "weighted":
+        weights = strategy.get("weights", {})
+        if not weights:
+            return _generate_random(field)
+        field_type = field.get("field_type", "")
+        if field_type == "checkbox":
+            # Each option has an independent % chance of being included
+            selected = []
+            for opt, pct in weights.items():
+                if random.random() * 100 < float(pct):
+                    selected.append(opt)
+            if not selected:
+                # Ensure at least one option is selected
+                candidates = [o for o, w in weights.items() if float(w) > 0]
+                if candidates:
+                    selected = [random.choice(candidates)]
+            return selected if selected else _generate_random(field)
+        else:
+            # Weighted single pick (radio, dropdown, linear_scale)
+            options = list(weights.keys())
+            weight_values = [float(weights[opt]) for opt in options]
+            if options and any(w > 0 for w in weight_values):
+                return random.choices(options, weights=weight_values, k=1)[0]
+            return _generate_random(field)
+
     # Default: random
     return _generate_random(field)
 

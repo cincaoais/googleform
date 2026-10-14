@@ -1,3 +1,4 @@
+import os
 import random
 
 DEFAULT_DELAY_MS = 1000
@@ -42,3 +43,8 @@ GFORM_TYPE_MAP = {
 
 def random_user_agent():
     return random.choice(USER_AGENTS)
+
+
+# Auth state persistence
+AUTH_STATE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'auth_states')
+GOOGLE_AUTH_STATE_FILE = os.path.join(AUTH_STATE_DIR, 'google_auth_state.json')
